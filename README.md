@@ -1,6 +1,6 @@
 # 🎬 IMDb Movie Reviews Sentiment Analysis
 
-An end-to-end Natural Language Processing (NLP) pipeline for binary sentiment classification on the IMDb Movie Reviews dataset using **TF-IDF Vectorization** and **Multinomial Naive Bayes**.
+An end-to-end Natural Language Processing (NLP) pipeline for binary sentiment classification on the IMDb Movie Reviews dataset using **TF-IDF Vectorization** and a **Multinomial Naive Bayes classifier implemented from scratch in NumPy** (no `sklearn.naive_bayes`).
 
 ---
 
@@ -39,25 +39,28 @@ $$\text{tfidf}(t, d) = \text{tf}(t, d) \times \left( \ln\left(\frac{1 + N}{1 + \
 * **N-gram Range:** Includes both unigrams and bigrams (`(1, 2)`) to capture local negation patterns (e.g., `"not good"`).
 * **Vocabulary Constraints:** Capped at `max_features=30,000` with `min_df=5` and `sublinear_tf=True`.
 
-### 3. Generative Modeling & Smoothing
-* **Naive Independence:** Formulates the decision boundary via Bayes' Rule in log-space to ensure numerical stability and prevent floating-point underflow:
+### 3. Generative Modeling & Smoothing (from scratch)
+* **Custom estimator:** `MultinomialNaiveBayes` (NumPy only) computes class priors, per-class word counts, additive-smoothed likelihoods, and log-space posteriors by hand, operating directly on the `scipy.sparse` TF-IDF matrix (never densified). Modular interface: `fit` / `train_model`, `predict`, `predict_log_proba`, `predict_proba` / `predict_model`.
+* **Naive Independence:** Formulates the decision rule via Bayes' Rule in log-space to ensure numerical stability and prevent floating-point underflow; posteriors are normalised with a max-shifted log-sum-exp:
   $$\hat{y} = \arg\max_{y} \left[ \log P(y) + \sum_{i=1}^{n} x_i \log P(x_i \mid y) \right]$$
 * **Zero-Frequency Correction:** Applies additive smoothing parameter $\alpha$ to prevent unseen test words from zeroing out the posterior probability.
 
 ### 4. Hyperparameter Optimization
-Evaluated across three smoothing regimes using **3-Fold Stratified Cross-Validation** on the training set:
+The smoothing strength $\alpha$ is swept across three regimes using **3-Fold Stratified Cross-Validation** (hand-rolled NumPy fold assignment) on the training set:
 
-| Configuration | Smoothing Strategy | Mean CV F1 | Std CV F1 | Fit Time |
-|---|---|:---:|:---:|:---:|
-| **`alpha = 0.1`** | **Lidstone Smoothing (Optimal)** | **`0.8754`** | **`0.0021`** | **`1.3s`** |
-| `alpha = 1.0` | Laplace ("Add-One") | `0.8748` | `0.0026` | `1.3s` |
-| `alpha ≈ 0` (`1e-9`) | Maximum Likelihood Estimation (MLE) | `0.8676` | `0.0026` | `1.8s` |
+| Configuration | Smoothing Strategy | Mean CV F1 | Std CV F1 |
+|---|---|:---:|:---:|
+| **`alpha = 1.0`** | **Laplace ("Add-One") — selected** | **`0.8733`** | **`0.0017`** |
+| `alpha = 0.1` | Lidstone (statistically tied with Laplace) | `0.8731` | `0.0014` |
+| `alpha ≈ 0` (`1e-9`) | Maximum Likelihood Estimation (MLE) | `0.8662` | `0.0006` |
+
+Laplace and Lidstone are within one standard deviation of each other; both clearly beat near-MLE. Smoothing matters; its exact strength in `[0.1, 1.0]` does not.
 
 ---
 
 ## 📈 Final Model Evaluation
 
-The final classifier was trained on the entire training set with optimal parameter $\alpha = 0.1$ and evaluated on the 5,000 held-out test reviews:
+The final classifier was trained on the entire training set with the auto-selected parameter $\alpha = 1.0$ and evaluated on the 5,000 held-out test reviews:
 
-* **Test-Set Binary F1-Score (Positive Class):** **`0.8777`**
+* **Test-Set Binary F1-Score (Positive Class):** **`0.8774`**
 * **Overall Test Accuracy:** **`88%`**
